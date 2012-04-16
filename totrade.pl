@@ -27,7 +27,7 @@ sub read_data{
 
 sub sort_by_points {
 	#ordenar por ordem descrescente de pontos e depois por ordem alfabética
-    $a->{points} <=> $b->{points} || $a->{name} cmp $b->{name};
+    $b->{points} <=> $a->{points} || $a->{name} cmp $b->{name};
 }
 
 # Each user will be a vertice.
@@ -69,7 +69,8 @@ sub list_of_destinations{
     
     return sort sort_by_points @out;   
 }
-
+
+# Cabeçalho do arquivoprint "#!EXPLICIT-PRIORITIES\n";
 
 my $users = index_users();
 foreach my $source ( sort keys %{$users} ) {
@@ -88,7 +89,7 @@ USER:
 		foreach (@destinations){
 		    
 		    #$out .=  qq/ $_->{name}.$_->{src}/;
-		    $out .=  qq/ $_->{src}.$_->{id}/;		}
+		    $out .=  qq/ $_->{src}.$_->{id}:$_->{points}/;		}
 		print "$out\n";
     }
 
