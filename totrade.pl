@@ -70,7 +70,13 @@ sub list_of_destinations{
     return sort sort_by_points @out;   
 }
 
-# Cabeçalho do arquivoprint "#!EXPLICIT-PRIORITIES\n";
+################################
+################################
+################################
+my $jar = 'C:\users\rodrigo\graph-copy\trademaximizer-1.3a\tm.jar';
+
+open my $to_trademax, "| java -jar $jar"
+		or die "Could not spaw java: $!\n";# Cabeçalho do arquivoprint $to_trademax "#!EXPLICIT-PRIORITIES\n";
 
 my $users = index_users();
 foreach my $source ( sort keys %{$users} ) {
@@ -90,7 +96,7 @@ USER:
 		    
 		    #$out .=  qq/ $_->{name}.$_->{src}/;
 		    $out .=  qq/ $_->{src}.$_->{id}:$_->{points}/;		}
-		print "$out\n";
+		print $to_trademax "$out\n";
     }
 
 }
