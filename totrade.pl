@@ -4,23 +4,39 @@ use lib qw(lib);
 
 use Text::CSV;
 use Getopt::Long;
+#use File::Temp;
 
-# O arquivo que contÈm os dados em formato CSV.
-our $data;
+## o arquivo tempor√°rio para a sa√≠da do java.
+#my  $temp = new File::Temp();
+#	$temp->close();
+#our $tempfile = $temp->filename;
+
+
+our $data; 							# O arquivo que cont√©m os dados em formato CSV.
 our $jar;
-our $iterations = 1000;
+our $iterations = 1;
+our $format     = "trademax";
 
 my $result = GetOptions (
 				"d|dados=s" 	   => \$data,
 				"j|jar=s"   	   => \$jar,
-				"i|iterations=i"   => \$iterations
+				"i|iterations=i"   => \$iterations,
+				"h|help"		   => \&print_help,
+#				"a|arborjs"		   => sub {$format = "arborjs"},
 			);
+sub print_help{
+	print qq/
+	$0: -d <arquivo.csv> -j <jar file> -i <n√∫mero de itera√ß√µes>
 
-die "$0: Informe o arquivo de dados com -d <arquivo.csv>\n"
-	unless defined $data;
+	-d	Arquivo CSV no formato: Matr√≠cula, Nome, Origem, Destino, Pontua√ß√£o
+	-j	Arquivo jar do programa TradeMaxizer
+	-i	N√∫mero de itera√ß√µes do algoritmo [ default 1 ]\n\n/;
+	#-a	Imprime no formato do arborjs.org\/halfviz\/ [default: formato do TradeMaximizer]\n\n/;
 
-die "$0: Informe a localizaÁ„o do jar do TradeMaximizer com -j <tm.jar>\n"
-	unless defined $jar;
+	exit 0;
+}
+
+print_help() and exit 1 unless defined $data and defined $jar;
 
 sub read_data{
 		
@@ -30,7 +46,7 @@ sub read_data{
 	
 	# discard first.
 	$csv->getline($fh); 
-	
+
 	my @data;
 	while (my $row = $csv->getline($fh)){
 		push @data, $row;
@@ -40,15 +56,15 @@ sub read_data{
 }
 
 sub sort_by_points {
-	#ordenar por ordem crescente de pontos e depois por ordem alfabÈtica
+	#ordenar por ordem crescente de pontos e depois por ordem alfab√©tica
     $a->{points} <=> $b->{points} || $a->{name} cmp $b->{name};
-	#	or die "$0: Dois usu·rios com a mesma pontuaÁ„o:"
+	#	or die "$0: Dois usu√°rios com a mesma pontua√ß√£o:"
 	#		   . join "\n", $a->{name}, $a->{mat}, $a->{points}
 	#		   . join "\n", $b->{name}, $b->{mat}, $b->{points}
 	#		   . "\n";
 }
 
-# Os us·rios solicitantes ser„o indexados por origem.
+# Os us√°rios solicitantes ser√£o indexados por origem.
 sub index_requests {
     my %pedidos;
 	my @requisicoes = read_data();
@@ -56,11 +72,11 @@ sub index_requests {
     foreach my $entry ( @requisicoes ) {
         my ( $mat, $name, $src, $dst, $points ) = @$entry;
 
-		# Inicializa o array da origem e destino se j· n„o existir.
+		# Inicializa o array da origem e destino se j√° n√£o existir.
 		$pedidos{$src} = [] unless ref $pedidos{$src};
 		$pedidos{$dst} = [] unless ref $pedidos{$dst};
 
-		die "$0: Usu·rio duplicado no arquivo de dados: $mat $name $src $dst $points\n"
+		die "$0: Usu√°rio duplicado no arquivo de dados: $mat $name $src $dst $points\n"
 			if grep { defined $_->{$mat} } @{ $pedidos{$src} };
 
 		my $pedido = {
@@ -86,30 +102,47 @@ sub vagas_no_destino{
     
     foreach my $guarda_que_deseja_sair ( @{ $pedidos->{$dst} } ){
 
-		# SÛ incluir nas vagas possÌveis aquelas que tambÈm podem ser atendidas,
-		# ou seja, cujo destino tambÈm tem alguÈm querendo sair.
+		# S√≥ incluir nas vagas poss√≠veis aquelas que tamb√©m podem ser atendidas,
+		# ou seja, cujo destino tamb√©m tem algu√©m querendo sair.
         push @vagas, $guarda_que_deseja_sair if @{ $pedidos->{ $guarda_que_deseja_sair->{dst} } };
     }
     
     return sort sort_by_points @vagas;   
 }
 
+# Formata a sa√≠da do programa
+sub format{
+	my @out = @_;
+
+	print join "\n", @out if $format eq 'trademax';
+
+
+	if ($format eq 'arborjs'){
+		my ($origem, $destino);
+		foreach (@out){
+			($origem, $destino) = m/^([^)]+)\s+(..\.\d+\.\d+)\s+receives.*(..\.\d+\.\d+)$/;
+			
+			print "$origem -> $destino\n" if defined $origem and defined $destino;
+		}
+	}
+}
+
 ################################
 ############## main ############
 ################################
 
-# Criar o Ìndice de pedidos
+# Criar o √≠ndice de pedidos
 my %pedidos = index_requests();
 
 # Iniciar o processo java
 open my $to_java, "| java -jar $jar"
 		or die "Could not spawn java proccess: $!\n";
 		
-# CabeÁalho
+# Cabe√ßalho
 print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=$iterations\n";
 
 # Imprimir as entradas no formato do programa
-# (nome) Origem.Matricula.Pontuacao: Vaga.Matricula:pontuaÁ„o Vaga.Matricula:pontuaÁ„o
+# (nome) Origem.Matricula.Pontuacao: Vaga.Matricula:pontua√ß√£o Vaga.Matricula:pontua√ß√£o
 #
 foreach my $source ( keys %pedidos ) {
 USER:
