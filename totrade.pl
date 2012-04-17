@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use lib qw(lib);
 
 use Text::CSV;
 use Getopt::Long;
