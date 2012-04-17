@@ -2,105 +2,125 @@ use strict;
 use warnings;
 
 use Text::CSV;
+use Getopt::Long;
+
+# O arquivo que contém os dados em formato CSV.
+our $data;
+our $jar;
+
+my $result = GetOptions (
+				"d|dados=s" => \$data,
+				"j|jar=s"   => \$jar
+			);
+
+die "$0: Informe o arquivo de dados com -d <arquivo.csv>\n"
+	unless defined $data;
+
+die "$0: Informe a localização do jar do TradeMaximizer com -j <tm.jar>\n"
+	unless defined $jar;
 
 sub read_data{
 		
 	my $csv = new Text::CSV({binary => 1});
 		
-	open my $fh, "<", "c:/users/rodrigo/graph/normalizada.csv" or die $!;
+	open my $fh, "<", "$data" or die $!;
 	
 	# discard first.
 	$csv->getline($fh); 
 	
-	#my $i = 0;
-	#my $limit = 100;
-	
-	my $data;
+	my @data;
 	while (my $row = $csv->getline($fh)){
-		push @$data, $row;
-		#return $data if $i++ eq $limit;
+		push @data, $row;
 	}
 	
-	return $data;
+	return @data;
 }
 
 sub sort_by_points {
-	#ordenar por ordem descrescente de pontos e depois por ordem alfabética
-    $b->{points} <=> $a->{points} || $a->{name} cmp $b->{name};
+	#ordenar por ordem crescente de pontos e depois por ordem alfabética
+    $a->{points} <=> $b->{points} || $a->{name} cmp $b->{name};
+	#	or die "$0: Dois usuários com a mesma pontuação:"
+	#		   . join "\n", $a->{name}, $a->{mat}, $a->{points}
+	#		   . join "\n", $b->{name}, $b->{mat}, $b->{points}
+	#		   . "\n";
 }
 
-# Each user will be a vertice.
-# Will give each user a numeric id
-# Will also group users by Source.
-sub index_users {
-    my %users;
-    my $i = 0;
-    foreach my $entry ( @{ read_data() } ) {
-        my ( $dst, $name, $src, $points ) = @$entry;
+# Os usários solicitantes serão indexados por origem.
+sub index_requests {
+    my %pedidos;
+	my @requisicoes = read_data();
 
-        unless ( grep { defined $_->{$name} } @{ $users{$src} } ) {
-            my $user = {
-                id     => $i++,
-                name   => $name,
-                src    => $src,
-                dst    => $dst,
-                points => $points
-            };
+    foreach my $entry ( @requisicoes ) {
+        my ( $mat, $name, $src, $dst, $points ) = @$entry;
 
-            # Save this user object on the appropriate slot.
-            push @{ $users{$src} }, $user;
+		# Inicializa o array da origem e destino se já não existir.
+		$pedidos{$src} = [] unless ref $pedidos{$src};
+		$pedidos{$dst} = [] unless ref $pedidos{$dst};
 
-        }
-    }
+		die "$0: Usuário duplicado no arquivo de dados: $mat $name $src $dst $points\n"
+			if grep { defined $_->{$mat} } @{ $pedidos{$src} };
 
-    return \%users;
+		my $pedido = {
+			mat    => $mat,
+			name   => $name,
+			src    => $src,
+			dst    => $dst,
+			points => $points
+		};
+
+		# Salva este pedido na origem apropriada.
+		push @{ $pedidos{$src} }, $pedido;
+
+	}
+
+    return %pedidos;
 }
 
-sub list_of_destinations{
-    my ($users, $dst) = @_;
-    my @out;
+# Lista todos as vagas num destino ordenadas por prioridade.
+sub vagas_no_destino{
+    my ($pedidos, $dst) = @_;
+    my @vagas;
     
-    foreach my $user_in_dst (@{ $users->{$dst} }){
-        # só incluir o usuário na saída se o lugar pra onde ele quer ir
-        # tiver alguém querendo sair (não for um array vazio).
-        push @out, $user_in_dst if @{ $users->{ $user_in_dst->{dst}} };
+    foreach my $guarda_que_deseja_sair ( @{ $pedidos->{$dst} } ){
+
+		# Só incluir nas vagas possíveis aquelas que também podem ser atendidas,
+		# ou seja, cujo destino também tem alguém querendo sair.
+        push @vagas, $guarda_que_deseja_sair if @{ $pedidos->{ $guarda_que_deseja_sair->{dst} } };
     }
     
-    return sort sort_by_points @out;   
+    return sort sort_by_points @vagas;   
 }
 
 ################################
+############## main ############
 ################################
-################################
-my $jar = 'C:\users\rodrigo\graph-copy\trademaximizer-1.3a\tm.jar';
 
-open my $to_trademax, "| java -jar $jar"
-		or die "Could not spaw java: $!\n";
+# Criar o índice de pedidos
+my %pedidos = index_requests();
+
+# Iniciar o processo java
+open my $to_java, "| java -jar $jar"
+		or die "Could not spawn java proccess: $!\n";
 		
-# Cabeçalho do arquivo
-print $to_trademax "#!EXPLICIT-PRIORITIES\n";
+# Cabeçalho
+print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=1000\n";
 
-my $users = index_users();
-foreach my $source ( sort keys %{$users} ) {
+# Imprimir as entradas no formato do programa
+# (nome) Origem.Matricula.Pontuacao: Vaga.Matricula:pontuação Vaga.Matricula:pontuação
+#
+foreach my $source ( keys %pedidos ) {
 USER:
-    foreach my $user ( @{ $users->{$source} } ) {
+    foreach my $pedido ( @{ $pedidos{$source} } ) {
         
- 		# Só incluir este usuário no trade se houver pelo menos um 
-		# usuário no destino.
-		my @destinations = list_of_destinations( $users, $user->{dst} );
+		my @vagas = vagas_no_destino( \%pedidos, $pedido->{dst} );
 		
-		next USER unless @destinations;
+		next USER unless @vagas;
 		
-        my $out =
-          sprintf( "(%s) %s.%s :", $user->{name}, $user->{src} , $user->{id} );
+        my $out = qq/($pedido->{name}) $pedido->{src}.$pedido->{mat}.$pedido->{points}:/;
           
-		foreach (@destinations){
-		    
-		    #$out .=  qq/ $_->{name}.$_->{src}/;
-		    $out .=  qq/ $_->{src}.$_->{id}:$_->{points}/;
-		}
+		$out .=  qq/ $_->{src}.$_->{mat}.$_->{points}=$_->{points}/ foreach (@vagas);
 
-		print $to_trademax "$out\n";
+		print $to_java "$out\n";
     }
 
 }
