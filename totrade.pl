@@ -8,10 +8,12 @@ use Getopt::Long;
 # O arquivo que contém os dados em formato CSV.
 our $data;
 our $jar;
+our $iterations = 1000;
 
 my $result = GetOptions (
-				"d|dados=s" => \$data,
-				"j|jar=s"   => \$jar
+				"d|dados=s" 	   => \$data,
+				"j|jar=s"   	   => \$jar,
+				"i|iterations=i"   => \$iterations
 			);
 
 die "$0: Informe o arquivo de dados com -d <arquivo.csv>\n"
@@ -104,7 +106,7 @@ open my $to_java, "| java -jar $jar"
 		or die "Could not spawn java proccess: $!\n";
 		
 # Cabeçalho
-print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=1000\n";
+print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=$iterations\n";
 
 # Imprimir as entradas no formato do programa
 # (nome) Origem.Matricula.Pontuacao: Vaga.Matricula:pontuação Vaga.Matricula:pontuação
