@@ -25,11 +25,11 @@ sub read_data{
 	return $data;
 }
 
-sub sort_by_points {
+sub sort_by_points {
 	#ordenar por ordem descrescente de pontos e depois por ordem alfabética
     $b->{points} <=> $a->{points} || $a->{name} cmp $b->{name};
 }
-
+
 # Each user will be a vertice.
 # Will give each user a numeric id
 # Will also group users by Source.
@@ -76,14 +76,17 @@ sub list_of_destinations{
 my $jar = 'C:\users\rodrigo\graph-copy\trademaximizer-1.3a\tm.jar';
 
 open my $to_trademax, "| java -jar $jar"
-		or die "Could not spaw java: $!\n";# Cabeçalho do arquivoprint $to_trademax "#!EXPLICIT-PRIORITIES\n";
+		or die "Could not spaw java: $!\n";
+		
+# Cabeçalho do arquivo
+print $to_trademax "#!EXPLICIT-PRIORITIES\n";
 
 my $users = index_users();
-foreach my $source ( sort keys %{$users} ) {
+foreach my $source ( sort keys %{$users} ) {
 USER:
     foreach my $user ( @{ $users->{$source} } ) {
         
-        		# Só incluir este usuário no trade se houver pelo menos um 
+ 		# Só incluir este usuário no trade se houver pelo menos um 
 		# usuário no destino.
 		my @destinations = list_of_destinations( $users, $user->{dst} );
 		
@@ -95,7 +98,9 @@ USER:
 		foreach (@destinations){
 		    
 		    #$out .=  qq/ $_->{name}.$_->{src}/;
-		    $out .=  qq/ $_->{src}.$_->{id}:$_->{points}/;		}
+		    $out .=  qq/ $_->{src}.$_->{id}:$_->{points}/;
+		}
+
 		print $to_trademax "$out\n";
     }
 
