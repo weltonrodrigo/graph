@@ -16,6 +16,7 @@ our $data; 							# O arquivo que contém os dados em formato CSV.
 our $jar;
 our $iterations = 1;
 our $format     = "trademax";
+our $dryrun		= 0; 
 
 my $result = GetOptions (
 				"d|dados=s" 	   => \$data,
@@ -23,6 +24,7 @@ my $result = GetOptions (
 				"i|iterations=i"   => \$iterations,
 				"h|help"		   => \&print_help,
 #				"a|arborjs"		   => sub {$format = "arborjs"},
+				"n|dry"		   	   => \$dryrun,
 			);
 sub print_help{
 	print qq/
@@ -30,6 +32,7 @@ sub print_help{
 
 	-d	Arquivo CSV no formato: Matrícula, Nome, Origem, Destino, Pontuação
 	-j	Arquivo jar do programa TradeMaxizer
+	-n	Mostar o arquivo que seria passado ao TradeMaximizer pra processamento.
 	-i	Número de iterações do algoritmo [ default 1 ]\n\n/;
 	#-a	Imprime no formato do arborjs.org\/halfviz\/ [default: formato do TradeMaximizer]\n\n/;
 
@@ -134,10 +137,16 @@ sub format{
 # Criar o índice de pedidos
 my %pedidos = index_requests();
 
-# Iniciar o processo java
-open my $to_java, "| java -jar $jar"
+# Mostrar a saída que iria pro java.
+my $to_java;
+if (not $dryrun){
+	# Iniciar o processo java
+	open $to_java, "| java -jar $jar"
 		or die "Could not spawn java proccess: $!\n";
-		
+}else{
+	$to_java = \*STDOUT;
+}
+
 # Cabeçalho
 print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=$iterations\n";
 
