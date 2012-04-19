@@ -215,7 +215,7 @@ USER:
 
             $out .= sprintf "%s.%d.%d ",
               $vaga->{src}, $vaga->{mat}, $vaga->{points}
-				if $prioridade eq 'simple';
+				if $prioridade eq 'none';
 
 
         }
