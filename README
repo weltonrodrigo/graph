@@ -1,0 +1,18 @@
+totrade.pl
+
+Este script alimenta o software TradeMaximizer para procurar possibilidades
+entre pessoas que querem trocar itens.
+
+No momento,  ele está configurado para um caso específico.
+
+
+Examplo de uso:
+
+perl totrade.pl -d <arquivo.csv> -j lib/TradeMaximizer-1.3a/tm.jar
+
+
+Exemplo de arquivo CSV
+
+id,nome,item oferecido, item que deseja, pontuação
+
+WELTON RODRIGO TORRES NASCIMENTO <rodrigo@familianascimento.org>
