@@ -10,6 +10,7 @@ our $jar;
 our $iterations = 1;
 our $format     = "trademax";
 our $dryrun		= 0; 
+our $prioridade = 'explicit';
 
 my $result = GetOptions (
 				"d|dados=s" 	   => \$data,
@@ -18,6 +19,7 @@ my $result = GetOptions (
 				"h|help"		   => \&print_help,
 #				"a|arborjs"		   => sub {$format = "arborjs"},
 				"n|dry"		   	   => \$dryrun,
+				"p|prioridade=s"   => \$prioridade, 
 			);
 sub print_help{
 	print qq/
@@ -26,7 +28,9 @@ sub print_help{
 	-d	Arquivo CSV no formato: Matrícula, Nome, Origem, Destino, Pontuação
 	-j	Arquivo jar do programa TradeMaxizer
 	-n	Mostar o arquivo que seria passado ao TradeMaximizer pra processamento.
-	-i	Número de iterações do algoritmo [ default 1 ]\n\n/;
+	-i	Número de iterações do algoritmo [ default 1 ]
+	-p	O tipo de prioridade a ser utilizado [default explicit]
+	/, "\n\n";
 	#-a	Imprime no formato do arborjs.org\/halfviz\/ [default: formato do TradeMaximizer]\n\n/;
 
 	exit 0;
@@ -178,7 +182,12 @@ if (not $dryrun){
 }
 
 # Cabeçalho
-print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=$iterations\n";
+my   $cabecalho = "#! ";
+my   @options;
+push @options, "EXPLICIT-PRIORITIES" if $prioridade eq 'explicit';
+push @options, "ITERATIONS=$iterations";
+
+print $to_java $cabecalho . ( join " ", @options ) . "\n";
 
 # Imprimir as entradas no formato do programa
 # (nome) Origem.Matricula.Pontuacao: Vaga.Matricula.pontuação=pontuação ...
@@ -201,7 +210,13 @@ USER:
 
             $out .= sprintf "%s.%d.%d=%d ",
               $vaga->{src}, $vaga->{mat}, $vaga->{points},
-              $vaga->{prioridade};
+              $vaga->{prioridade}
+				if $prioridade eq 'explicit';
+
+            $out .= sprintf "%s.%d.%d ",
+              $vaga->{src}, $vaga->{mat}, $vaga->{points}
+				if $prioridade eq 'simple';
+
 
         }
 
