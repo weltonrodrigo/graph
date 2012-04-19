@@ -4,13 +4,6 @@ use lib qw(lib);
 
 use Text::CSV;
 use Getopt::Long;
-#use File::Temp;
-
-## o arquivo temporário para a saída do java.
-#my  $temp = new File::Temp();
-#	$temp->close();
-#our $tempfile = $temp->filename;
-
 
 our $data; 							# O arquivo que contém os dados em formato CSV.
 our $jar;
@@ -58,13 +51,13 @@ sub read_data{
 	return @data;
 }
 
+# A prioridade é dada pela pontuação, sendo desempatados pela
+# idade (mais velho ganha).
+#
+# No caso desta função, o desempate é pelo inverso da ordem alfabética
+# por falta de dados.
 sub sort_by_points {
-	#ordenar por ordem crescente de pontos e depois por ordem alfabética
-    $a->{points} <=> $b->{points} || $a->{name} cmp $b->{name};
-	#	or die "$0: Dois usuários com a mesma pontuação:"
-	#		   . join "\n", $a->{name}, $a->{mat}, $a->{points}
-	#		   . join "\n", $b->{name}, $b->{mat}, $b->{points}
-	#		   . "\n";
+	$a->{points} <=> $b->{points} || $b->{name} cmp $a->{name};
 }
 
 # Os usários solicitantes serão indexados por origem.
@@ -75,42 +68,79 @@ sub index_requests {
     foreach my $entry ( @requisicoes ) {
         my ( $mat, $name, $src, $dst, $points ) = @$entry;
 
-		# Inicializa o array da origem e destino se já não existir.
-		$pedidos{$src} = [] unless ref $pedidos{$src};
-		$pedidos{$dst} = [] unless ref $pedidos{$dst};
 
-		die "$0: Usuário duplicado no arquivo de dados: $mat $name $src $dst $points\n"
-			if grep { defined $_->{$mat} } @{ $pedidos{$src} };
+		# Nova entrada no índice
+		my $pedido;
+        if ( not defined $pedidos{$src}{$mat} ) {
+            $pedido = {
+                mat    => $mat,
+                name   => $name,
+                src    => $src,
+                dst    => $dst,
+                points => $points
+            };
+        }
+        else {
 
-		my $pedido = {
-			mat    => $mat,
-			name   => $name,
-			src    => $src,
-			dst    => $dst,
-			points => $points
-		};
+            warn "$0: Usuário duplicado no arquivo de dados: "
+              . "$mat $name $src $dst $points\n";
+
+			next;
+        }
 
 		# Salva este pedido na origem apropriada.
-		push @{ $pedidos{$src} }, $pedido;
-
+		$pedidos{$src}{$mat} = $pedido;
 	}
 
     return %pedidos;
 }
 
-# Lista todos as vagas num destino ordenadas por prioridade.
-sub vagas_no_destino{
+# Lista todos as vagas num destino num ordem aleatória.
+sub vagas{
     my ($pedidos, $dst) = @_;
     my @vagas;
-    
-    foreach my $guarda_que_deseja_sair ( @{ $pedidos->{$dst} } ){
 
-		# Só incluir nas vagas possíveis aquelas que também podem ser atendidas,
-		# ou seja, cujo destino também tem alguém querendo sair.
-        push @vagas, $guarda_que_deseja_sair if @{ $pedidos->{ $guarda_que_deseja_sair->{dst} } };
+    foreach my $matricula ( keys %{ $pedidos->{$dst} } ){
+		my $guarda_saindo = $pedidos->{$dst}{$matricula}; 
+		my $seu_destino   = $guarda_saindo->{dst};
+
+		# Tem inscrito pra sair lá?
+		my $inscritos = $pedidos->{ $seu_destino };
+		next unless keys %{ $inscritos };
+
+        push @vagas, $guarda_saindo;
     }
-    
-    return sort sort_by_points @vagas;   
+	return @vagas;
+
+}
+
+# Organizar prioridades
+# Colocar as vagas pela ordem crescente de prioridade
+sub priorizar_vagas {
+    my @vagas = @_;
+
+    # Primeiro coloca na ordem crescente de pontos e alfa-
+    # bética invertida.
+    @vagas = sort sort_by_points @vagas;
+
+    # A prioridade inicial é o número de pontos.
+    foreach my $v (@vagas) {
+        $v->{prioridade} = $v->{points} unless defined $v->{prioridade};
+    }
+
+    for ( my $i = 0 ; $i < $#vagas ; $i++ ) {
+        my $a = $vagas[$i];
+        my $b = $vagas[ $i + 1 ];
+
+        # Em caso de empate, ajuste a prioridade do
+        # vencedor.
+        if ( $b->{prioridade} <= $a->{prioridade} ) {
+            $b->{prioridade} = $a->{prioridade} + 1;
+        }
+
+    }
+
+	return @vagas;
 }
 
 # Formata a saída do programa
@@ -151,19 +181,29 @@ if (not $dryrun){
 print $to_java "#! EXPLICIT-PRIORITIES ITERATIONS=$iterations\n";
 
 # Imprimir as entradas no formato do programa
-# (nome) Origem.Matricula.Pontuacao: Vaga.Matricula:pontuação Vaga.Matricula:pontuação
+# (nome) Origem.Matricula.Pontuacao: Vaga.Matricula.pontuação=pontuação ...
 #
-foreach my $source ( keys %pedidos ) {
+foreach my $origem ( keys %pedidos ) {
 USER:
-    foreach my $pedido ( @{ $pedidos{$source} } ) {
+    foreach my $matricula ( keys %{ $pedidos{$origem} } ) {
+		my $pedido = $pedidos{$origem}{$matricula};
+
+        my $out = sprintf "(%s) %s.%d.%s: ",
+          $pedido->{name},
+          $pedido->{src},
+          $pedido->{mat},
+          $pedido->{points};
         
-		my @vagas = vagas_no_destino( \%pedidos, $pedido->{dst} );
-		
-		next USER unless @vagas;
-		
-        my $out = qq/($pedido->{name}) $pedido->{src}.$pedido->{mat}.$pedido->{points}:/;
-          
-		$out .=  qq/ $_->{src}.$_->{mat}.$_->{points}=$_->{points}/ foreach (@vagas);
+		# Obter lista de vagas.
+		my @vagas = vagas( \%pedidos, $pedido->{dst} );
+
+        foreach my $vaga ( priorizar_vagas(@vagas) ) {
+
+            $out .= sprintf "%s.%d.%d=%d ",
+              $vaga->{src}, $vaga->{mat}, $vaga->{points},
+              $vaga->{prioridade};
+
+        }
 
 		print $to_java "$out\n";
     }
