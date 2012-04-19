@@ -51,4 +51,4 @@ print $b_out $_ foreach sort @b;
 close $a_out;
 close $b_out;
 
-system qw/diff --side-by-side/, $a_out->filename, $b_out->filename;
+system qw/vim -d/, $a_out->filename, $b_out->filename;
