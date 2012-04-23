@@ -8,7 +8,6 @@ use Getopt::Long;
 our $data; 							# O arquivo que contém os dados em formato CSV.
 our $jar;
 our $iterations = 1;
-our $format     = "trademax";
 our $dryrun		= 0; 
 our $prioridade = 'explicit';
 
@@ -17,7 +16,6 @@ my $result = GetOptions (
 				"j|jar=s"   	   => \$jar,
 				"i|iterations=i"   => \$iterations,
 				"h|help"		   => \&print_help,
-#				"a|arborjs"		   => sub {$format = "arborjs"},
 				"n|dry"		   	   => \$dryrun,
 				"p|prioridade=s"   => \$prioridade, 
 			);
@@ -31,7 +29,6 @@ sub print_help{
 	-i	Número de iterações do algoritmo [ default 1 ]
 	-p	O tipo de prioridade a ser utilizado [default explicit]
 	/, "\n\n";
-	#-a	Imprime no formato do arborjs.org\/halfviz\/ [default: formato do TradeMaximizer]\n\n/;
 
 	exit 0;
 }
@@ -145,23 +142,6 @@ sub priorizar_vagas {
     }
 
 	return @vagas;
-}
-
-# Formata a saída do programa
-sub format{
-	my @out = @_;
-
-	print join "\n", @out if $format eq 'trademax';
-
-
-	if ($format eq 'arborjs'){
-		my ($origem, $destino);
-		foreach (@out){
-			($origem, $destino) = m/^([^)]+)\s+(..\.\d+\.\d+)\s+receives.*(..\.\d+\.\d+)$/;
-			
-			print "$origem -> $destino\n" if defined $origem and defined $destino;
-		}
-	}
 }
 
 ################################
